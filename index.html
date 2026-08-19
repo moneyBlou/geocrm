@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <meta name="theme-color" content="#f5f6f8" />
+  <title>GeoCRM</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div class="brand-copy">
+          <strong>GeoCRM</strong>
+          <span>объекты недвижимости</span>
+        </div>
+      </div>
+
+      <div class="global-search">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" placeholder="Адрес, имя, телефон, ситуация…" autocomplete="off" />
+      </div>
+
+      <nav class="tabs" aria-label="Разделы CRM">
+        <button class="tab active" data-view="map">Карта</button>
+        <button class="tab" data-view="today">Сегодня <span id="todayBadge" class="badge">0</span></button>
+        <button class="tab" data-view="objects">Объекты</button>
+      </nav>
+
+      <div class="top-actions">
+        <button id="refreshBtn" class="btn btn-ghost" title="Обновить данные">↻</button>
+        <button id="addObjectBtn" class="btn btn-secondary" disabled>+ Объект</button>
+        <button id="connectGoogleBtn" class="btn btn-primary">Подключить Google</button>
+        <button id="disconnectGoogleBtn" class="btn btn-ghost hidden">Отключить</button>
+      </div>
+    </header>
+
+    <div id="configBanner" class="config-banner hidden"></div>
+    <div id="toast" class="toast hidden"></div>
+
+    <main>
+      <section id="mapView" class="view active map-layout">
+        <aside class="filters-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Фильтры</h2>
+              <span id="resultCount" class="muted">0 объектов</span>
+            </div>
+            <button id="resetFiltersBtn" class="link-btn">Сбросить</button>
+          </div>
+
+          <div class="field">
+            <label for="statusFilter">Статус</label>
+            <select id="statusFilter">
+              <option value="">Все статусы</option>
+              <option>НОВЫЙ</option>
+              <option>НЕ ДОЗВОНИЛСЯ</option>
+              <option>ПЕРЕЗВОНИТЬ</option>
+              <option>ПЕРСПЕКТИВНЫЙ</option>
+              <option>В РАБОТЕ</option>
+              <option>НЕИНТЕРЕСЕН</option>
+              <option>АРХИВ</option>
+            </select>
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="priceMin">Цена от, млн</label>
+              <input id="priceMin" type="number" min="0" step="0.5" placeholder="0" />
+            </div>
+            <div class="field">
+              <label for="priceMax">Цена до, млн</label>
+              <input id="priceMax" type="number" min="0" step="0.5" placeholder="50" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="priorityFilter">Приоритет</label>
+            <select id="priorityFilter">
+              <option value="">Любой</option>
+              <option>ОБЫЧНЫЙ</option>
+              <option>ВЫСОКИЙ</option>
+              <option>СРОЧНЫЙ</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="dueFilter">Следующий контакт</label>
+            <select id="dueFilter">
+              <option value="">Любой</option>
+              <option value="overdue">Просрочен</option>
+              <option value="today">Сегодня</option>
+              <option value="tomorrow">Завтра</option>
+              <option value="none">Не назначен</option>
+            </select>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="legend">
+            <h3>Статусы на карте</h3>
+            <div><i class="legend-dot blue"></i> Новый</div>
+            <div><i class="legend-dot orange"></i> Не дозвонился</div>
+            <div><i class="legend-dot yellow"></i> Перезвонить</div>
+            <div><i class="legend-dot green"></i> Перспективный</div>
+            <div><i class="legend-dot violet"></i> В работе</div>
+            <div><i class="legend-dot gray"></i> Неинтересен / архив</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <button id="geocodeBtn" class="btn btn-secondary full" disabled>Определить координаты</button>
+          <p id="geocodeInfo" class="helper">Координаты будут сохранены в LAT/LNG.</p>
+        </aside>
+
+        <section class="map-stage">
+          <div class="stats-row">
+            <div class="stat"><span>На карте</span><strong id="statTotal">0</strong></div>
+            <div class="stat stat-danger"><span>Просрочено</span><strong id="statOverdue">0</strong></div>
+            <div class="stat"><span>Сегодня</span><strong id="statToday">0</strong></div>
+            <div class="stat stat-success"><span>Перспективных</span><strong id="statInteresting">0</strong></div>
+          </div>
+
+          <div id="map" class="map">
+            <div class="map-empty">
+              <div class="map-empty-icon">⌖</div>
+              <strong>Подключи Google Sheets</strong>
+              <span>После подключения объекты с координатами появятся здесь.</span>
+            </div>
+          </div>
+        </section>
+
+        <aside id="drawer" class="drawer">
+          <div class="drawer-empty">
+            <div class="drawer-empty-icon">⌖</div>
+            <strong>Выбери объект</strong>
+            <span>Нажми на точку карты или строку в списке.</span>
+          </div>
+        </aside>
+      </section>
+
+      <section id="todayView" class="view page-view">
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">Рабочий день</span>
+            <h1>Сегодня</h1>
+            <p>Повторные контакты и просрочки из поля «СЛЕДУЮЩИЙ КОНТАКТ».</p>
+          </div>
+          <button class="btn btn-secondary" data-go="map">Открыть карту</button>
+        </div>
+        <div id="todaySummary" class="summary-grid"></div>
+        <div id="todayLists" class="today-lists"></div>
+      </section>
+
+      <section id="objectsView" class="view page-view">
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">База</span>
+            <h1>Все объекты</h1>
+            <p>Та же Google-таблица, только без необходимости жить внутри Google-таблицы.</p>
+          </div>
+          <button class="btn btn-secondary" data-go="map">Открыть карту</button>
+        </div>
+
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Адрес</th>
+                <th>Цена</th>
+                <th>Контакт</th>
+                <th>Статус</th>
+                <th>Следующий контакт</th>
+                <th>Приоритет</th>
+              </tr>
+            </thead>
+            <tbody id="objectsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop hidden"></div>
+
+  <section id="objectModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <span class="eyebrow" id="objectModalEyebrow">Объект</span>
+        <h2 id="objectModalTitle">Добавить объект</h2>
+      </div>
+      <button class="modal-close" data-close-modal>×</button>
+    </div>
+    <form id="objectForm" class="modal-body form-grid">
+      <input type="hidden" id="objectFormId" />
+
+      <label class="field span-2">
+        <span>Адрес *</span>
+        <input id="formAddress" required placeholder="Москва, Левобережная улица, 4к10" />
+      </label>
+
+      <label class="field">
+        <span>Имя</span>
+        <input id="formName" placeholder="Эрик" />
+      </label>
+
+      <label class="field">
+        <span>Телефон</span>
+        <input id="formPhone" placeholder="+7 999 123-45-67" />
+      </label>
+
+      <label class="field span-2">
+        <span>Ситуация</span>
+        <textarea id="formSituation" rows="4" placeholder="Что важно знать по объекту"></textarea>
+      </label>
+
+      <label class="field span-2">
+        <span>О чем договорились</span>
+        <textarea id="formAgreement" rows="3" placeholder="Позвонить в пятницу после 15:00"></textarea>
+      </label>
+
+      <label class="field">
+        <span>Стоимость</span>
+        <input id="formPrice" type="number" min="0" step="1000" placeholder="19300000" />
+      </label>
+
+      <label class="field">
+        <span>Дата контакта</span>
+        <input id="formLastContact" type="date" />
+      </label>
+
+      <label class="field">
+        <span>Статус</span>
+        <select id="formStatus">
+          <option>НОВЫЙ</option>
+          <option>НЕ ДОЗВОНИЛСЯ</option>
+          <option>ПЕРЕЗВОНИТЬ</option>
+          <option>ПЕРСПЕКТИВНЫЙ</option>
+          <option>В РАБОТЕ</option>
+          <option>НЕИНТЕРЕСЕН</option>
+          <option>АРХИВ</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Следующий контакт</span>
+        <input id="formNextContact" type="date" />
+      </label>
+
+      <label class="field">
+        <span>Приоритет</span>
+        <select id="formPriority">
+          <option>ОБЫЧНЫЙ</option>
+          <option>ВЫСОКИЙ</option>
+          <option>СРОЧНЫЙ</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Ссылка на объект</span>
+        <input id="formUrl" type="url" placeholder="https://..." />
+      </label>
+
+      <div class="modal-actions span-2">
+        <button type="button" class="btn btn-ghost" data-close-modal>Отмена</button>
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="contactModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <span class="eyebrow">Контакт</span>
+        <h2>Зафиксировать звонок</h2>
+      </div>
+      <button class="modal-close" data-close-modal>×</button>
+    </div>
+    <form id="contactForm" class="modal-body form-grid">
+      <input type="hidden" id="contactObjectId" />
+
+      <label class="field span-2">
+        <span>Что произошло *</span>
+        <textarea id="contactNote" rows="5" required placeholder="Собственник готов встретиться с клиентом…"></textarea>
+      </label>
+
+      <label class="field span-2">
+        <span>Актуальная ситуация</span>
+        <textarea id="contactSituation" rows="3"></textarea>
+      </label>
+
+      <label class="field span-2">
+        <span>О чем договорились</span>
+        <textarea id="contactAgreement" rows="3"></textarea>
+      </label>
+
+      <label class="field">
+        <span>Новый статус</span>
+        <select id="contactStatus">
+          <option>НОВЫЙ</option>
+          <option>НЕ ДОЗВОНИЛСЯ</option>
+          <option>ПЕРЕЗВОНИТЬ</option>
+          <option>ПЕРСПЕКТИВНЫЙ</option>
+          <option>В РАБОТЕ</option>
+          <option>НЕИНТЕРЕСЕН</option>
+          <option>АРХИВ</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Следующий контакт</span>
+        <input id="contactNextDate" type="date" />
+      </label>
+
+      <div class="modal-actions span-2">
+        <button type="button" class="btn btn-ghost" data-close-modal>Отмена</button>
+        <button type="submit" class="btn btn-primary">Записать звонок</button>
+      </div>
+    </form>
+  </section>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="./config.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
