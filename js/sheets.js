@@ -1,61 +1,33 @@
 const BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
-/**
- * Безопасно оборачивает имя листа в одинарные кавычки.
- *
- * Например:
- * ОБЪЕКТЫ -> 'ОБЪЕКТЫ'
- */
-function quoteSheetName(sheetName) {
-  return `'${String(sheetName).replace(/'/g, "''")}'`;
-}
 
 /**
- * Создаёт корректный A1-диапазон.
+ * Создаёт корректный диапазон Google Sheets.
  *
- * Например:
- * makeRange("ОБЪЕКТЫ", "A1:O")
- * -> 'ОБЪЕКТЫ'!A1:O
+ * Пример:
+ * ОБЪЕКТЫ + A1:O5000
+ * превращается в:
+ * ОБЪЕКТЫ!A1:O5000
  */
 function makeRange(sheetName, range) {
-  return `${quoteSheetName(sheetName)}!${range}`;
+  return `${sheetName}!${range}`;
 }
 
+
 /**
- * На случай batchUpdate:
- * автоматически исправляет диапазон вида:
+ * Нормализует диапазоны для batchUpdate.
  *
  * ОБЪЕКТЫ!A2:O2
- *
- * на:
- *
- * 'ОБЪЕКТЫ'!A2:O2
+ * остаётся ОБЪЕКТЫ!A2:O2
  */
 function normalizeRange(range) {
   if (!range || typeof range !== "string") {
     return range;
   }
 
-  const separatorIndex = range.indexOf("!");
-
-  if (separatorIndex === -1) {
-    return range;
-  }
-
-  const rawSheetName = range.slice(0, separatorIndex);
-  const cellRange = range.slice(separatorIndex + 1);
-
-  // Если имя листа уже заключено в кавычки,
-  // ничего повторно не делаем.
-  if (
-    rawSheetName.startsWith("'") &&
-    rawSheetName.endsWith("'")
-  ) {
-    return range;
-  }
-
-  return makeRange(rawSheetName, cellRange);
+  return range;
 }
+
 
 /**
  * Универсальный запрос к Google Sheets API.
@@ -70,6 +42,7 @@ async function googleFetch(url, token, options = {}) {
     }
   });
 
+
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
 
@@ -77,78 +50,104 @@ async function googleFetch(url, token, options = {}) {
       const data = await response.json();
       message = data?.error?.message || message;
     } catch (_) {
-      // Если Google вернул не JSON,
-      // оставляем HTTP-ошибку как есть.
     }
 
     throw new Error(message);
   }
 
+
   if (response.status === 204) {
     return null;
   }
 
+
   return response.json();
 }
 
+
+
 /**
-/**
- * Читает все данные A:O с первой строки.
+ * Читает таблицу A:O.
+ *
+ * Используем фиксированный диапазон,
+ * потому что Google Sheets API стабильнее
+ * работает с A1:O5000.
  */
 export async function readValues({
   spreadsheetId,
   sheetName,
   token
 }) {
-  // ВАЖНО:
-  // A1:O является некорректным диапазоном для Google Sheets API.
-  // Используем весь диапазон колонок A:O.
-  const range = makeRange(sheetName, "A:O");
+
+  const range = makeRange(
+    sheetName,
+    "A1:O5000"
+  );
+
+
+  console.log(
+    "Google Sheets range:",
+    range
+  );
+
 
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
     `/values/${encodeURIComponent(range)}`;
 
-  const result = await googleFetch(url, token);
+
+  const result = await googleFetch(
+    url,
+    token
+  );
+
 
   return result.values || [];
 }
 
+
+
 /**
- * Массово обновляет несколько диапазонов.
+ * Массовое обновление диапазонов.
  */
 export async function batchUpdateRanges({
   spreadsheetId,
   token,
   data
 }) {
+
   if (!Array.isArray(data) || data.length === 0) {
     return null;
   }
 
-  // Нормализуем диапазоны, чтобы кириллическое
-  // имя листа тоже всегда было в кавычках.
+
   const normalizedData = data.map(item => ({
     ...item,
     range: normalizeRange(item.range)
   }));
 
+
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
     `/values:batchUpdate`;
 
+
   return googleFetch(url, token, {
+
     method: "POST",
 
     body: JSON.stringify({
       valueInputOption: "USER_ENTERED",
       data: normalizedData
     })
+
   });
 }
 
+
+
 /**
- * Полностью обновляет одну строку A:O.
+ * Полностью обновляет строку A:O.
  */
 export async function updateRow({
   spreadsheetId,
@@ -157,29 +156,42 @@ export async function updateRow({
   rowNumber,
   values
 }) {
+
   const range = makeRange(
     sheetName,
     `A${rowNumber}:O${rowNumber}`
   );
+
 
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
     `/values/${encodeURIComponent(range)}` +
     `?valueInputOption=USER_ENTERED`;
 
+
   return googleFetch(url, token, {
+
     method: "PUT",
 
     body: JSON.stringify({
+
       range,
+
       majorDimension: "ROWS",
-      values: [values]
+
+      values: [
+        values
+      ]
+
     })
+
   });
 }
 
+
+
 /**
- * Добавляет новую строку в конец таблицы.
+ * Добавляет новую строку.
  */
 export async function appendRow({
   spreadsheetId,
@@ -187,7 +199,12 @@ export async function appendRow({
   token,
   values
 }) {
-  const range = makeRange(sheetName, "A:O");
+
+  const range = makeRange(
+    sheetName,
+    "A1:O5000"
+  );
+
 
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
@@ -196,13 +213,22 @@ export async function appendRow({
     `?valueInputOption=USER_ENTERED` +
     `&insertDataOption=INSERT_ROWS`;
 
+
   return googleFetch(url, token, {
+
     method: "POST",
 
     body: JSON.stringify({
+
       range,
+
       majorDimension: "ROWS",
-      values: [values]
+
+      values: [
+        values
+      ]
+
     })
+
   });
 }
