@@ -57,18 +57,74 @@ function parseCoordinate(value) {
 }
 
 export function parseDate(value) {
+
   if (!value) return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  const raw = String(value).trim();
-  const m = raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
-  if (m) {
-    let year = Number(m[3]);
-    if (year < 100) year += 2000;
-    const date = new Date(year, Number(m[2]) - 1, Number(m[1]), 12, 0, 0);
-    return Number.isNaN(date.getTime()) ? null : date;
+
+
+  // Google Sheets хранит даты как число:
+  // например 46217 = дата в формате Sheets
+  if (typeof value === "number") {
+
+    const date = new Date(
+      Math.round(
+        (value - 25569) * 86400 * 1000
+      )
+    );
+
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date;
   }
+
+
+  const raw = String(value).trim();
+
+
+  // Формат:
+  // 01.01.2026
+  // 01/01/2026
+  // 01-01-2026
+  const match = raw.match(
+    /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/
+  );
+
+
+  if (match) {
+
+    let year = Number(match[3]);
+
+
+    if (year < 100) {
+      year += 2000;
+    }
+
+
+    const date = new Date(
+      year,
+      Number(match[2]) - 1,
+      Number(match[1]),
+      12,
+      0,
+      0
+    );
+
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date;
+  }
+
+
+
+  // ISO формат:
+  // 2026-01-01
   const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date;
+
+
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
 }
 
 export function dateToInput(date) {
