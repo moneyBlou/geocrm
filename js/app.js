@@ -255,18 +255,22 @@ function renderAll({ fit = false } = {}) {
 
 function renderGeocodeState() {
 
+  const missing = state.objects.filter(item =>
+    item.address &&
+    (
+      !Number.isFinite(item.lat) ||
+      !Number.isFinite(item.lng)
+    )
+  );
+
   ui.geocode.disabled =
     state.busy ||
-    !state.objects.length;
-
-
-  const count = state.objects.length;
-
+    missing.length === 0;
 
   ui.geocodeInfo.textContent =
-    count
-      ? `Можно обновить координаты для ${count} объектов.`
-      : "Нет объектов для геокодирования.";
+    missing.length
+      ? `Без координат: ${missing.length} объектов`
+      : "Все объекты имеют координаты.";
 }
 
 function selectObject(item) {
@@ -441,11 +445,55 @@ function openContactModal(item) {
 }
 
 async function geocodeObjectIfNeeded(object, force = false) {
-  if (!force && Number.isFinite(object.lat) && Number.isFinite(object.lng)) return object;
+
+  if (
+    !force &&
+    Number.isFinite(object.lat) &&
+    Number.isFinite(object.lng)
+  ) {
+    return object;
+  }
+
   await ensureMap();
-  const result = await state.map.geocode(object.address);
-  if (!result) return { ...object, lat: null, lng: null };
-  return { ...object, lat: result.lat, lng: result.lng };
+
+  const address = String(object.address || "").trim();
+
+  if (!address) {
+    return {
+      ...object,
+      lat: null,
+      lng: null
+    };
+  }
+
+  const result = await state.map.geocode(address);
+
+  if (!result) {
+
+    console.warn(
+      "Yandex не нашёл адрес:",
+      address
+    );
+
+    return {
+      ...object,
+      lat: null,
+      lng: null
+    };
+  }
+
+  console.log(
+    "GEOCODE RESULT:",
+    address,
+    result.lat,
+    result.lng
+  );
+
+  return {
+    ...object,
+    lat: Number(result.lat),
+    lng: Number(result.lng)
+  };
 }
 
 async function saveObjectFromForm(event) {
@@ -497,7 +545,26 @@ async function saveObjectFromForm(event) {
       await updateRow({ spreadsheetId: cfg.spreadsheetId, sheetName: cfg.sheetName, token, rowNumber: existing.rowNumber, values: toRowValues(object) });
       toast("Объект обновлён.", "success");
     } else {
-      await appendRow({ spreadsheetId: cfg.spreadsheetId, sheetName: cfg.sheetName, token, values: toRowValues(object) });
+
+      object.lat = null;
+      object.lng = null;
+
+      try {
+        object = await geocodeObjectIfNeeded(object, true);
+      } catch (error) {
+        console.warn(
+          "Ошибка геокодирования нового объекта:",
+          error
+        );
+      }
+
+      await appendRow({
+        spreadsheetId: cfg.spreadsheetId,
+        sheetName: cfg.sheetName,
+        token,
+        values: toRowValues(object)
+      });
+
       toast("Объект добавлен.", "success");
     }
     closeModals();
