@@ -92,6 +92,7 @@ async function googleFetch(url, token, options = {}) {
 }
 
 /**
+/**
  * Читает все данные A:O с первой строки.
  */
 export async function readValues({
@@ -99,7 +100,10 @@ export async function readValues({
   sheetName,
   token
 }) {
-  const range = makeRange(sheetName, "A1:O");
+  // ВАЖНО:
+  // A1:O является некорректным диапазоном для Google Sheets API.
+  // Используем весь диапазон колонок A:O.
+  const range = makeRange(sheetName, "A:O");
 
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
