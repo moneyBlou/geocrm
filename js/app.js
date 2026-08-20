@@ -254,11 +254,19 @@ function renderAll({ fit = false } = {}) {
 }
 
 function renderGeocodeState() {
-  const missing = state.objects.filter(x => x.address && (!Number.isFinite(x.lat) || !Number.isFinite(x.lng)));
-  ui.geocode.disabled = state.busy || !hasAccessToken() || missing.length === 0;
-  ui.geocodeInfo.textContent = missing.length
-    ? `Без координат: ${missing.length}. За один запуск обработаем до ${Number(cfg.geocodeBatchSize || 20)}.`
-    : "У всех объектов есть координаты.";
+
+  ui.geocode.disabled =
+    state.busy ||
+    !state.objects.length;
+
+
+  const count = state.objects.length;
+
+
+  ui.geocodeInfo.textContent =
+    count
+      ? `Можно обновить координаты для ${count} объектов.`
+      : "Нет объектов для геокодирования.";
 }
 
 function selectObject(item) {
