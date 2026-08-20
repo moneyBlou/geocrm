@@ -2,37 +2,10 @@ const BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
 
 /**
- * Создаёт корректный диапазон Google Sheets.
- *
- * Пример:
- * ОБЪЕКТЫ + A1:O5000
- * превращается в:
- * ОБЪЕКТЫ!A1:O5000
- */
-function makeRange(sheetName, range) {
-  return `${sheetName}!${range}`;
-}
-
-
-/**
- * Нормализует диапазоны для batchUpdate.
- *
- * ОБЪЕКТЫ!A2:O2
- * остаётся ОБЪЕКТЫ!A2:O2
- */
-function normalizeRange(range) {
-  if (!range || typeof range !== "string") {
-    return range;
-  }
-
-  return range;
-}
-
-
-/**
- * Универсальный запрос к Google Sheets API.
+ * Универсальный запрос к Google Sheets API
  */
 async function googleFetch(url, token, options = {}) {
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -44,13 +17,13 @@ async function googleFetch(url, token, options = {}) {
 
 
   if (!response.ok) {
+
     let message = `${response.status} ${response.statusText}`;
 
     try {
       const data = await response.json();
       message = data?.error?.message || message;
-    } catch (_) {
-    }
+    } catch (_) {}
 
     throw new Error(message);
   }
@@ -67,11 +40,7 @@ async function googleFetch(url, token, options = {}) {
 
 
 /**
- * Читает таблицу A:O.
- *
- * Используем фиксированный диапазон,
- * потому что Google Sheets API стабильнее
- * работает с A1:O5000.
+ * Читаем таблицу
  */
 export async function readValues({
   spreadsheetId,
@@ -79,16 +48,12 @@ export async function readValues({
   token
 }) {
 
-  const range = makeRange(
-    sheetName,
-    "A1:O5000"
-  );
+
+  // ЖЁСТКО задаём лист для проверки
+  const range = "ОБЪЕКТЫ!A1:O1000";
 
 
-  console.log(
-    "Google Sheets range:",
-    range
-  );
+  console.log("READ RANGE:", range);
 
 
   const url =
@@ -108,7 +73,7 @@ export async function readValues({
 
 
 /**
- * Массовое обновление диапазонов.
+ * Массовое обновление
  */
 export async function batchUpdateRanges({
   spreadsheetId,
@@ -116,15 +81,10 @@ export async function batchUpdateRanges({
   data
 }) {
 
-  if (!Array.isArray(data) || data.length === 0) {
+
+  if (!data || !data.length) {
     return null;
   }
-
-
-  const normalizedData = data.map(item => ({
-    ...item,
-    range: normalizeRange(item.range)
-  }));
 
 
   const url =
@@ -132,35 +92,47 @@ export async function batchUpdateRanges({
     `/values:batchUpdate`;
 
 
-  return googleFetch(url, token, {
+  const fixedData = data.map(item => ({
+    ...item,
+    range: item.range.replace(
+      /^'?ОБЪЕКТЫ'?/,
+      "ОБЪЕКТЫ"
+    )
+  }));
 
-    method: "POST",
 
-    body: JSON.stringify({
-      valueInputOption: "USER_ENTERED",
-      data: normalizedData
-    })
+  return googleFetch(
+    url,
+    token,
+    {
+      method: "POST",
 
-  });
+      body: JSON.stringify({
+
+        valueInputOption: "USER_ENTERED",
+
+        data: fixedData
+
+      })
+    }
+  );
 }
 
 
 
 /**
- * Полностью обновляет строку A:O.
+ * Обновление строки
  */
 export async function updateRow({
   spreadsheetId,
-  sheetName,
   token,
   rowNumber,
   values
 }) {
 
-  const range = makeRange(
-    sheetName,
-    `A${rowNumber}:O${rowNumber}`
-  );
+
+  const range =
+    `ОБЪЕКТЫ!A${rowNumber}:O${rowNumber}`;
 
 
   const url =
@@ -169,66 +141,71 @@ export async function updateRow({
     `?valueInputOption=USER_ENTERED`;
 
 
-  return googleFetch(url, token, {
+  return googleFetch(
+    url,
+    token,
+    {
 
-    method: "PUT",
+      method: "PUT",
 
-    body: JSON.stringify({
+      body: JSON.stringify({
 
-      range,
+        range,
 
-      majorDimension: "ROWS",
+        majorDimension: "ROWS",
 
-      values: [
-        values
-      ]
+        values: [
+          values
+        ]
 
-    })
+      })
 
-  });
+    }
+  );
 }
 
 
 
 /**
- * Добавляет новую строку.
+ * Добавление строки
  */
 export async function appendRow({
   spreadsheetId,
-  sheetName,
   token,
   values
 }) {
 
-  const range = makeRange(
-    sheetName,
-    "A1:O5000"
-  );
+
+  const range =
+    "ОБЪЕКТЫ!A1:O1000";
 
 
   const url =
     `${BASE}/${encodeURIComponent(spreadsheetId)}` +
     `/values/${encodeURIComponent(range)}` +
-    `:append` +
-    `?valueInputOption=USER_ENTERED` +
+    `:append?valueInputOption=USER_ENTERED` +
     `&insertDataOption=INSERT_ROWS`;
 
 
-  return googleFetch(url, token, {
+  return googleFetch(
+    url,
+    token,
+    {
 
-    method: "POST",
+      method: "POST",
 
-    body: JSON.stringify({
+      body: JSON.stringify({
 
-      range,
+        range,
 
-      majorDimension: "ROWS",
+        majorDimension: "ROWS",
 
-      values: [
-        values
-      ]
+        values: [
+          values
+        ]
 
-    })
+      })
 
-  });
+    }
+  );
 }
